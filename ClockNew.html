@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Upgraded Digital Clock & Stopwatch</title>
+  <style>
+    body {
+      margin:0;
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#0f172a;
+      color:#e2e8f0;
+      font-family:Segoe UI,Roboto,Arial,sans-serif;
+    }
+    .wrap{
+      width:95%;
+      max-width:900px;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:20px;
+    }
+    @media(max-width:720px){.wrap{grid-template-columns:1fr;}}
+    .card{
+      background:#1e293b;
+      padding:20px;
+      border-radius:12px;
+      box-shadow:0 4px 16px rgba(0,0,0,.5);
+    }
+    h2{margin:0 0 10px;font-size:1.1rem;color:#93c5fd;}
+    .clock-face,.stop-display{
+      text-align:center;
+      font-weight:600;
+      font-size:2.2rem;
+      font-variant-numeric:tabular-nums;
+      padding:20px;
+      background:#0f172a;
+      border-radius:8px;
+      margin-bottom:10px;
+    }
+    .date{ text-align:center; color:#94a3b8; margin-bottom:10px; }
+    .controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
+    .btn{
+      padding:10px 14px;
+      border:none;
+      border-radius:8px;
+      cursor:pointer;
+      font-weight:600;
+      transition:0.2s;
+    }
+    .btn:disabled{opacity:0.4;cursor:not-allowed;}
+    .primary{background:#3b82f6;color:white;}
+    .warn{background:#f97316;color:white;}
+    .neutral{background:#475569;color:white;}
+    .btn:hover:not(:disabled){opacity:0.9;}
+    ul.laps{
+      list-style:none;
+      padding:0;
+      margin:10px 0 0;
+      max-height:120px;
+      overflow-y:auto;
+      font-size:0.95rem;
+    }
+    ul.laps li{
+      background:#0f172a;
+      padding:6px 10px;
+      border-radius:6px;
+      margin-bottom:4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- CLOCK -->
+    <section class="card">
+      <h2>Digital Clock</h2>
+      <div id="clockFace" class="clock-face">--:--:--</div>
+      <div id="dateLine" class="date">Loading...</div>
+      <div class="controls">
+        <button id="toggleFormat" class="btn neutral">Switch to 12-hour</button>
+      </div>
+    </section>
+
+    <!-- STOPWATCH -->
+    <section class="card">
+      <h2>Stopwatch</h2>
+      <div id="stopDisplay" class="stop-display">00:00:00.000</div>
+      <div class="controls">
+        <button id="startBtn" class="btn primary">Start</button>
+        <button id="stopBtn" class="btn warn" disabled>Stop</button>
+        <button id="lapBtn" class="btn neutral" disabled>Lap</button>
+        <button id="resetBtn" class="btn neutral" disabled>Reset</button>
+      </div>
+      <ul id="laps" class="laps"></ul>
+    </section>
+  </div>
+
+<script>
+/* -------------------------
+   DIGITAL CLOCK
+------------------------- */
+const clockFace = document.getElementById('clockFace');
+const dateLine = document.getElementById('dateLine');
+const toggleBtn = document.getElementById('toggleFormat');
+let is24Hour = true;
+
+function updateClock(){
+  const now = new Date();
+  let hrs = now.getHours();
+  let ampm = "";
+  if(!is24Hour){
+    ampm = hrs >= 12 ? " PM" : " AM";
+    hrs = hrs % 12 || 12;
+  }
+  const h = String(hrs).padStart(2,"0");
+  const m = String(now.getMinutes()).padStart(2,"0");
+  const s = String(now.getSeconds()).padStart(2,"0");
+  clockFace.textContent = `${h}:${m}:${s}${ampm}`;
+  const opts = { weekday:"long", year:"numeric", month:"long", day:"numeric" };
+  dateLine.textContent = now.toLocaleDateString(undefined, opts);
+}
+setInterval(updateClock,1000); updateClock();
+
+toggleBtn.addEventListener("click",()=>{
+  is24Hour = !is24Hour;
+  toggleBtn.textContent = is24Hour ? "Switch to 12-hour" : "Switch to 24-hour";
+  updateClock();
+});
+
+/* -------------------------
+   STOPWATCH with Laps
+------------------------- */
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const resetBtn = document.getElementById('resetBtn');
+const lapBtn = document.getElementById('lapBtn');
+const stopDisplay = document.getElementById('stopDisplay');
+const lapsList = document.getElementById('laps');
+
+let running=false, startTime=0, elapsedBefore=0, rafId=null;
+
+function formatTime(ms){
+  const total = Math.max(0, ms);
+  const hours = Math.floor(total/3600000);
+  const mins  = Math.floor((total%3600000)/60000);
+  const secs  = Math.floor((total%60000)/1000);
+  const millis= total%1000;
+  const hh = String(hours).padStart(2,"0");
+  const mm = String(mins).padStart(2,"0");
+  const ss = String(secs).padStart(2,"0");
+  const mmm= String(millis).padStart(3,"0");
+  return `${hh}:${mm}:${ss}.${mmm}`;
+}
+function updateStopwatch(){
+  const elapsed = elapsedBefore + (Date.now()-startTime);
+  stopDisplay.textContent = formatTime(elapsed);
+  rafId=requestAnimationFrame(updateStopwatch);
+}
+function startSW(){
+  if(running) return;
+  running=true;
+  startTime=Date.now();
+  rafId=requestAnimationFrame(updateStopwatch);
+  startBtn.disabled=true; stopBtn.disabled=false; resetBtn.disabled=false; lapBtn.disabled=false;
+}
+function stopSW(){
+  if(!running) return;
+  running=false;
+  cancelAnimationFrame(rafId);
+  elapsedBefore+=Date.now()-startTime;
+  startBtn.disabled=false; stopBtn.disabled=true;
+}
+function resetSW(){
+  running=false;
+  cancelAnimationFrame(rafId);
+  startTime=0; elapsedBefore=0;
+  stopDisplay.textContent="00:00:00.000";
+  lapsList.innerHTML="";
+  startBtn.disabled=false; stopBtn.disabled=true; resetBtn.disabled=true; lapBtn.disabled=true;
+}
+function lapSW(){
+  const current=stopDisplay.textContent;
+  const li=document.createElement("li");
+  li.textContent=`Lap ${lapsList.children.length+1}: ${current}`;
+  lapsList.prepend(li); // newest on top
+}
+startBtn.addEventListener("click",startSW);
+stopBtn.addEventListener("click",stopSW);
+resetBtn.addEventListener("click",resetSW);
+lapBtn.addEventListener("click",lapSW);
+</script>
+</body>
+</html>
